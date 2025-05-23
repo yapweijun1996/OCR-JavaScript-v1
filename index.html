@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>OCR Tool</title>
   <!-- Styles will be added in the next step -->
   <style>
@@ -62,6 +64,8 @@
   </div>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.4/dist/tesseract.min.js"></script>
   <script>
+    // Prevent pinch-to-zoom on iOS Safari
+    document.addEventListener('gesturestart', e => e.preventDefault());
     const dropzone = document.getElementById('dropzone');
     const fileInput = document.getElementById('file-input');
     const preview = document.getElementById('preview');
