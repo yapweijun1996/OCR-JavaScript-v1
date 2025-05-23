@@ -145,6 +145,37 @@
     const resultEl = document.getElementById('result');
     const engineSelector = document.getElementById('ocr-engine');
     const languageSelector = document.getElementById('ocr-language');
+    // Debug mode elements
+    const debugToggle = document.getElementById('debug-toggle');
+    const debugPanel = document.getElementById('debug-panel');
+    const debugStatusEl = document.getElementById('debug-status');
+    const debugLogEl = document.getElementById('debug-log');
+    const clearDebugBtn = document.getElementById('clear-debug');
+    // Debug functions
+    function logDebug(msg) {
+      if (!debugToggle.checked) return;
+      const li = document.createElement('li');
+      const ts = new Date().toLocaleTimeString();
+      li.textContent = `[${ts}] ${msg}`;
+      debugLogEl.appendChild(li);
+      debugLogEl.scrollTop = debugLogEl.scrollHeight;
+    }
+    function setDebugStatus(text) {
+      debugStatusEl.textContent = 'Status: ' + text;
+    }
+    // Toggle debug panel visibility
+    debugToggle.addEventListener('change', () => {
+      debugPanel.style.display = debugToggle.checked ? 'block' : 'none';
+      if (debugToggle.checked) {
+        debugLogEl.innerHTML = '';
+        logDebug('Debug mode enabled');
+      }
+    });
+    // Clear debug log button
+    clearDebugBtn.addEventListener('click', () => {
+      debugLogEl.innerHTML = '';
+      logDebug('Debug log cleared');
+    });
 
     function handleFiles(files) {
       if (!files || files.length === 0) return;
