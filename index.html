@@ -46,6 +46,7 @@
     <p>Or paste an image (e.g., press Print Screen and paste) anywhere on this page.</p>
     <!-- Task 7: Image preview will go here -->
     <img id="preview" src="" alt="Image preview" style="display:none" />
+    <canvas id="ocr-canvas" style="display:none"></canvas>
     <!-- Task 9: OCR result display will go here -->
     <label for="result">OCR Output:</label>
     <textarea id="result" readonly placeholder="OCR result will appear here..."></textarea>
@@ -113,20 +114,46 @@
       preview.src = url;
       preview.style.display = 'block';
       resultEl.value = 'Initializing OCR...';
-      const language = document.getElementById('ocr-language').value;
-      Tesseract.recognize(url, language, {
-        logger: m => {
-          if (m.status === 'recognizing text') {
-            resultEl.value = `Progress: ${Math.round(m.progress * 100)}%`;
+      const engine = currentEngine;
+      if (engine === 'tesseract') {
+        const language = languageSelector.value;
+        Tesseract.recognize(url, language, {
+          logger: m => {
+            if (m.status === 'recognizing text') {
+              resultEl.value = `Progress: ${Math.round(m.progress * 100)}%`;
+            }
           }
-        }
-      })
-      .then(({ data: { text } }) => {
-        resultEl.value = text;
-      })
-      .catch(err => {
-        resultEl.value = 'Error: ' + err.message;
-      });
+        })
+        .then(({ data: { text } }) => {
+          resultEl.value = text;
+        })
+        .catch(err => {
+          resultEl.value = 'Error: ' + err.message;
+        });
+      } else if (engine === 'ocrad') {
+        resultEl.value = 'Processing with OCRAD...';
+        loadOcrEngine('ocrad').then(() => {
+          const canvas = document.getElementById('ocr-canvas');
+          const ctx = canvas.getContext('2d');
+          const drawAndRecognize = () => {
+            canvas.width = preview.naturalWidth;
+            canvas.height = preview.naturalHeight;
+            ctx.drawImage(preview, 0, 0);
+            try {
+              resultEl.value = OCRAD(canvas);
+            } catch (e) {
+              resultEl.value = 'OCRAD error: ' + e.message;
+            }
+          };
+          if (!preview.complete) {
+            preview.onload = drawAndRecognize;
+          } else {
+            drawAndRecognize();
+          }
+        }).catch(err => {
+          resultEl.value = 'Error loading OCRAD: ' + err.message;
+        });
+      }
     }
 
     dropzone.addEventListener('click', () => fileInput.click());
