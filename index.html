@@ -88,7 +88,12 @@
       <select id="ocr-engine">
         <option value="tesseract">Tesseract.js</option>
         <option value="ocrad">OCRAD.js</option>
+        <option value="ocrspace">OCR.space API</option>
       </select>
+      <div id="ocrspace-key-container" style="display:none; margin-left:1rem;">
+        <label for="ocrspace-key">OCR.space API Key:</label>
+        <input type="text" id="ocrspace-key" placeholder="Enter OCR.space API key" style="margin-left:0.5rem;" />
+      </div>
       <label for="ocr-language">OCR Language:</label>
       <select id="ocr-language">
         <option value="eng">English</option>
@@ -122,6 +127,10 @@
         name: 'OCRAD.js',
         url: 'https://cdn.jsdelivr.net/npm/ocrad.js@0.0.1/ocrad.min.js',
         loaded: false,
+      },
+      ocrspace: {
+        name: 'OCR.space API',
+        loaded: true
       }
     };
     let currentEngine = 'tesseract';
@@ -277,26 +286,47 @@
           setDebugStatus('Error: OCRAD engine load failed');
           resultEl.value = 'Error loading OCRAD: ' + err.message;
         });
+      } else if (engine === 'ocrspace') {
+        const key = document.getElementById('ocrspace-key').value.trim();
+        if (!key) {
+          logDebug('OCR.space API key missing');
+          setDebugStatus('Error: API key required');
+          resultEl.value = 'Error: OCR.space API key required';
+          return;
+        }
+        logDebug(`Calling OCR.space with key length ${key.length}`);
+        setDebugStatus('Calling OCR.space...');
+        const form = new FormData();
+        form.append('apikey', key);
+        form.append('language', languageSelector.value || 'eng');
+        form.append('isOverlayRequired', 'false');
+        form.append('file', files[0]);
+        fetch('https://api.ocr.space/parse/image', { method: 'POST', body: form })
+          .then(r => r.json())
+          .then(json => {
+            if (json.IsErroredOnProcessing) {
+              throw new Error(json.ErrorMessage.join('\n'));
+            }
+            const text = json.ParsedResults[0].ParsedText;
+            logDebug(`OCR.space returned ${text.length} chars`);
+            setDebugStatus('OCR.space result');
+            resultEl.value = text;
+          })
+          .catch(err => {
+            logDebug(`OCR.space error: ${err.message}`);
+            setDebugStatus('Error: OCR.space');
+            resultEl.value = 'Error: ' + err.message;
+          });
       }
     }
 
+    // Event listeners
     dropzone.addEventListener('click', () => fileInput.click());
     dropzone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
     fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-    dropzone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropzone.classList.add('dragover');
-    });
-    dropzone.addEventListener('dragleave', (e) => {
-      e.preventDefault();
-      dropzone.classList.remove('dragover');
-    });
-    dropzone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropzone.classList.remove('dragover');
-      handleFiles(e.dataTransfer.files);
-    });
-
+    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+    dropzone.addEventListener('dragleave', (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); });
+    dropzone.addEventListener('drop', (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
     document.addEventListener('paste', (e) => {
       if (e.clipboardData) {
         const items = e.clipboardData.items;
@@ -310,13 +340,13 @@
         }
       }
     });
-
     engineSelector.addEventListener('change', () => {
       const selected = engineSelector.value;
       logDebug(`Engine changed to ${ocrEngines[selected].name}`);
       setDebugStatus(`Engine: ${ocrEngines[selected].name}`);
+      document.getElementById('ocrspace-key-container').style.display = selected === 'ocrspace' ? 'block' : 'none';
+      languageSelector.disabled = selected === 'ocrspace';
       engineSelector.disabled = true;
-      languageSelector.disabled = true;
       resultEl.value = `Loading ${ocrEngines[selected].name}...`;
       loadOcrEngine(selected)
         .then(() => {
@@ -328,9 +358,9 @@
         })
         .finally(() => {
           engineSelector.disabled = false;
-          languageSelector.disabled = false;
+          languageSelector.disabled = selected === 'ocrspace';
         });
     });
   </script>
 </body>
-</html> 
+</html>
