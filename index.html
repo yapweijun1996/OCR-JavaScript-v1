@@ -159,6 +159,25 @@
         }
       }
     });
+
+    engineSelector.addEventListener('change', () => {
+      const selected = engineSelector.value;
+      engineSelector.disabled = true;
+      languageSelector.disabled = true;
+      resultEl.value = `Loading ${ocrEngines[selected].name}...`;
+      loadOcrEngine(selected)
+        .then(() => {
+          currentEngine = selected;
+          resultEl.value = `${ocrEngines[selected].name} loaded.`;
+        })
+        .catch(err => {
+          resultEl.value = 'Error loading engine: ' + err.message;
+        })
+        .finally(() => {
+          engineSelector.disabled = false;
+          languageSelector.disabled = false;
+        });
+    });
   </script>
 </body>
 </html> 
