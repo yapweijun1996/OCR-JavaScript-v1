@@ -71,8 +71,21 @@
       const url = URL.createObjectURL(file);
       preview.src = url;
       preview.style.display = 'block';
-      resultEl.value = '';
-      // OCR processing will be triggered later
+      resultEl.value = 'Initializing OCR...';
+      const language = document.getElementById('ocr-language').value;
+      Tesseract.recognize(url, language, {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            resultEl.value = `Progress: ${Math.round(m.progress * 100)}%`;
+          }
+        }
+      })
+      .then(({ data: { text } }) => {
+        resultEl.value = text;
+      })
+      .catch(err => {
+        resultEl.value = 'Error: ' + err.message;
+      });
     }
 
     dropzone.addEventListener('click', () => fileInput.click());
