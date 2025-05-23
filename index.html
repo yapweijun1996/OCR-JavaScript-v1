@@ -120,7 +120,7 @@
       },
       ocrad: {
         name: 'OCRAD.js',
-        url: 'https://cdn.jsdelivr.net/npm/ocrad.js@0.3.1/dist/ocrad.min.js',
+        url: 'https://cdn.jsdelivr.net/npm/ocrad.js@0.0.1/ocrad.min.js',
         loaded: false,
       }
     };
@@ -156,14 +156,6 @@
         document.body.appendChild(script);
       });
     }
-    // On page load, ensure Tesseract is already loaded
-    loadOcrEngine('tesseract').catch(console.error);
-    const dropzone = document.getElementById('dropzone');
-    const fileInput = document.getElementById('file-input');
-    const preview = document.getElementById('preview');
-    const resultEl = document.getElementById('result');
-    const engineSelector = document.getElementById('ocr-engine');
-    const languageSelector = document.getElementById('ocr-language');
     // Debug mode elements
     const debugToggle = document.getElementById('debug-toggle');
     const debugPanel = document.getElementById('debug-panel');
@@ -195,7 +187,24 @@
       debugLogEl.innerHTML = '';
       logDebug('Debug log cleared');
     });
+    // Initial OCR engine load after debug setup
+    loadOcrEngine('tesseract')
+      .then(() => {
+        setDebugStatus(`${ocrEngines['tesseract'].name} initial load complete`);
+        logDebug('Initial OCR engine loaded');
+      })
+      .catch(err => {
+        setDebugStatus('Error loading initial OCR engine');
+        logDebug(`Initial engine load failed: ${err.message}`);
+      });
 
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file-input');
+    const preview = document.getElementById('preview');
+    const resultEl = document.getElementById('result');
+    const engineSelector = document.getElementById('ocr-engine');
+    const languageSelector = document.getElementById('ocr-language');
+    // Debug functions
     function handleFiles(files) {
       if (!files || files.length === 0) return;
       const file = files[0];
