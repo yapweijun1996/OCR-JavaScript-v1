@@ -128,12 +128,31 @@
     function loadOcrEngine(engineKey) {
       return new Promise((resolve, reject) => {
         const engine = ocrEngines[engineKey];
-        if (!engine) return reject(new Error('Unknown engine'));
-        if (engine.loaded) return resolve();
+        if (!engine) {
+          logDebug(`Unknown engine key: ${engineKey}`);
+          setDebugStatus(`Error: Unknown engine`);
+          return reject(new Error('Unknown engine'));
+        }
+        if (engine.loaded) {
+          logDebug(`${engine.name} already loaded`);
+          setDebugStatus(`${engine.name} already loaded`);
+          return resolve();
+        }
+        logDebug(`Loading ${engine.name}...`);
+        setDebugStatus(`Loading ${engine.name}...`);
         const script = document.createElement('script');
         script.src = engine.url;
-        script.onload = () => { engine.loaded = true; resolve(); };
-        script.onerror = () => reject(new Error(`Failed to load ${engine.name}`));
+        script.onload = () => {
+          engine.loaded = true;
+          logDebug(`${engine.name} loaded`);
+          setDebugStatus(`${engine.name} loaded`);
+          resolve();
+        };
+        script.onerror = () => {
+          logDebug(`Failed to load ${engine.name}`);
+          setDebugStatus(`Error loading ${engine.name}`);
+          reject(new Error(`Failed to load ${engine.name}`));
+        };
         document.body.appendChild(script);
       });
     }
@@ -180,38 +199,62 @@
     function handleFiles(files) {
       if (!files || files.length === 0) return;
       const file = files[0];
+      logDebug(`Selected file: ${file.name} (${file.type}, ${file.size} bytes)`);
+      setDebugStatus(`Selected: ${file.name}`);
       const url = URL.createObjectURL(file);
+      preview.onload = () => {
+        logDebug(`Preview displayed: ${preview.naturalWidth}x${preview.naturalHeight}`);
+        setDebugStatus(`Preview ready (${preview.naturalWidth}x${preview.naturalHeight})`);
+      };
       preview.src = url;
       preview.style.display = 'block';
       resultEl.value = 'Initializing OCR...';
       const engine = currentEngine;
       if (engine === 'tesseract') {
         const language = languageSelector.value;
+        logDebug(`Starting Tesseract OCR (lang=${language})`);
+        setDebugStatus(`OCR: Tesseract.js (${language})`);
         Tesseract.recognize(url, language, {
           logger: m => {
             if (m.status === 'recognizing text') {
-              resultEl.value = `Progress: ${Math.round(m.progress * 100)}%`;
+              const prog = Math.round(m.progress * 100);
+              resultEl.value = `Progress: ${prog}%`;
+              logDebug(`Progress: ${prog}%`);
             }
           }
         })
         .then(({ data: { text } }) => {
+          logDebug(`Tesseract OCR completed, text length: ${text.length}`);
+          setDebugStatus('OCR Complete');
           resultEl.value = text;
         })
         .catch(err => {
+          logDebug(`Tesseract OCR error: ${err.message}`);
+          setDebugStatus('Error: OCR failed');
           resultEl.value = 'Error: ' + err.message;
         });
       } else if (engine === 'ocrad') {
+        logDebug('Starting OCRAD OCR');
+        setDebugStatus('OCR: OCRAD.js');
         resultEl.value = 'Processing with OCRAD...';
         loadOcrEngine('ocrad').then(() => {
+          logDebug('OCRAD engine loaded, starting recognition');
+          setDebugStatus('OCR: OCRAD.js');
           const canvas = document.getElementById('ocr-canvas');
           const ctx = canvas.getContext('2d');
           const drawAndRecognize = () => {
+            logDebug('Drawing image to canvas');
             canvas.width = preview.naturalWidth;
             canvas.height = preview.naturalHeight;
             ctx.drawImage(preview, 0, 0);
             try {
-              resultEl.value = OCRAD(canvas);
+              const text = OCRAD(canvas);
+              logDebug(`OCRAD OCR completed, text length: ${text.length}`);
+              setDebugStatus('OCR Complete');
+              resultEl.value = text;
             } catch (e) {
+              logDebug(`OCRAD OCR error: ${e.message}`);
+              setDebugStatus('Error: OCR failed');
               resultEl.value = 'OCRAD error: ' + e.message;
             }
           };
@@ -221,6 +264,8 @@
             drawAndRecognize();
           }
         }).catch(err => {
+          logDebug(`Error loading OCRAD engine: ${err.message}`);
+          setDebugStatus('Error: OCRAD engine load failed');
           resultEl.value = 'Error loading OCRAD: ' + err.message;
         });
       }
@@ -259,6 +304,8 @@
 
     engineSelector.addEventListener('change', () => {
       const selected = engineSelector.value;
+      logDebug(`Engine changed to ${ocrEngines[selected].name}`);
+      setDebugStatus(`Engine: ${ocrEngines[selected].name}`);
       engineSelector.disabled = true;
       languageSelector.disabled = true;
       resultEl.value = `Loading ${ocrEngines[selected].name}...`;
