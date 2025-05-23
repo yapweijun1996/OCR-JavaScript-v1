@@ -88,12 +88,7 @@
       <select id="ocr-engine">
         <option value="tesseract">Tesseract.js</option>
         <option value="ocrad">OCRAD.js</option>
-        <option value="ocrspace">OCR.space API</option>
       </select>
-      <div id="ocrspace-key-container" style="display:none; margin-left:1rem;">
-        <label for="ocrspace-key">OCR.space API Key:</label>
-        <input type="text" id="ocrspace-key" placeholder="Enter OCR.space API key" style="margin-left:0.5rem;" />
-      </div>
       <label for="ocr-language">OCR Language:</label>
       <select id="ocr-language">
         <option value="eng">English</option>
@@ -106,6 +101,18 @@
       </select>
       <label for="debug-toggle"><input type="checkbox" id="debug-toggle"> Debug Mode</label>
     </div>
+    <!-- Preprocessing controls -->
+    <div id="preprocess-panel" style="display:none; margin-top:1rem; border:1px solid #ccc; padding:0.5rem; border-radius:4px;">
+      <h3>Preprocessing</h3>
+      <div class="preprocess-controls" style="display:flex; flex-wrap:wrap; gap:1rem; align-items:center;">
+        <label><input type="checkbox" id="toggle-grayscale"> Grayscale</label>
+        <label>Threshold: <input type="range" id="slider-threshold" min="0" max="255" value="128"></label>
+        <label>Contrast: <input type="range" id="slider-contrast" min="-100" max="100" value="0"></label>
+        <label>Brightness: <input type="range" id="slider-brightness" min="-100" max="100" value="0"></label>
+        <label>Blur: <input type="range" id="slider-blur" min="0" max="10" value="0"></label>
+        <button id="apply-preprocess">Apply</button>
+      </div>
+    </div>
     <div id="debug-panel" style="display:none; margin-top:1rem; border:1px solid #ddd; padding:0.5rem; font-family:monospace; max-height:200px; overflow:auto;">
       <p id="debug-status">Status: </p>
       <button id="clear-debug">Clear Debug</button>
@@ -113,6 +120,7 @@
     </div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.4/dist/tesseract.min.js"></script>
+  <script async src="https://docs.opencv.org/4.7.0/opencv.js" onload="console.log('OpenCV.js loaded');"></script>
   <script>
     // Prevent pinch-to-zoom on iOS Safari
     document.addEventListener('gesturestart', e => e.preventDefault());
@@ -127,10 +135,6 @@
         name: 'OCRAD.js',
         url: 'https://cdn.jsdelivr.net/npm/ocrad.js@0.0.1/ocrad.min.js',
         loaded: false,
-      },
-      ocrspace: {
-        name: 'OCR.space API',
-        loaded: true
       }
     };
     let currentEngine = 'tesseract';
@@ -286,37 +290,6 @@
           setDebugStatus('Error: OCRAD engine load failed');
           resultEl.value = 'Error loading OCRAD: ' + err.message;
         });
-      } else if (engine === 'ocrspace') {
-        const key = document.getElementById('ocrspace-key').value.trim();
-        if (!key) {
-          logDebug('OCR.space API key missing');
-          setDebugStatus('Error: API key required');
-          resultEl.value = 'Error: OCR.space API key required';
-          return;
-        }
-        logDebug(`Calling OCR.space with key length ${key.length}`);
-        setDebugStatus('Calling OCR.space...');
-        const form = new FormData();
-        form.append('apikey', key);
-        form.append('language', languageSelector.value || 'eng');
-        form.append('isOverlayRequired', 'false');
-        form.append('file', files[0]);
-        fetch('https://api.ocr.space/parse/image', { method: 'POST', body: form })
-          .then(r => r.json())
-          .then(json => {
-            if (json.IsErroredOnProcessing) {
-              throw new Error(json.ErrorMessage.join('\n'));
-            }
-            const text = json.ParsedResults[0].ParsedText;
-            logDebug(`OCR.space returned ${text.length} chars`);
-            setDebugStatus('OCR.space result');
-            resultEl.value = text;
-          })
-          .catch(err => {
-            logDebug(`OCR.space error: ${err.message}`);
-            setDebugStatus('Error: OCR.space');
-            resultEl.value = 'Error: ' + err.message;
-          });
       }
     }
 
@@ -344,8 +317,6 @@
       const selected = engineSelector.value;
       logDebug(`Engine changed to ${ocrEngines[selected].name}`);
       setDebugStatus(`Engine: ${ocrEngines[selected].name}`);
-      document.getElementById('ocrspace-key-container').style.display = selected === 'ocrspace' ? 'block' : 'none';
-      languageSelector.disabled = selected === 'ocrspace';
       engineSelector.disabled = true;
       resultEl.value = `Loading ${ocrEngines[selected].name}...`;
       loadOcrEngine(selected)
@@ -358,8 +329,50 @@
         })
         .finally(() => {
           engineSelector.disabled = false;
-          languageSelector.disabled = selected === 'ocrspace';
         });
+    });
+    // Toggle preprocess panel based on image loaded
+    const preprocessPanel = document.getElementById('preprocess-panel');
+    preview.addEventListener('load', () => {
+      preprocessPanel.style.display = 'block';
+    });
+    // OpenCV preprocessing logic
+    const toggleGray = document.getElementById('toggle-grayscale');
+    const sliderThreshold = document.getElementById('slider-threshold');
+    const sliderContrast = document.getElementById('slider-contrast');
+    const sliderBrightness = document.getElementById('slider-brightness');
+    const sliderBlur = document.getElementById('slider-blur');
+    const applyPre = document.getElementById('apply-preprocess');
+    const processCanvas = document.createElement('canvas');
+    applyPre.addEventListener('click', () => {
+      if (typeof cv === 'undefined') {
+        alert('OpenCV.js not loaded');
+        return;
+      }
+      if (!preview.src) return;
+      processCanvas.width = preview.naturalWidth;
+      processCanvas.height = preview.naturalHeight;
+      let src = cv.imread(preview);
+      let dst = new cv.Mat();
+      // Grayscale
+      if (toggleGray.checked) cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
+      else src.copyTo(dst);
+      // Contrast and brightness: dst = dst*alpha + beta
+      let alpha = sliderContrast.value / 100 + 1;
+      let beta = Number(sliderBrightness.value);
+      dst.convertTo(dst, -1, alpha, beta);
+      // Threshold
+      let threshVal = Number(sliderThreshold.value);
+      cv.threshold(dst, dst, threshVal, 255, cv.THRESH_BINARY);
+      // Blur
+      let k = Number(sliderBlur.value);
+      if (k > 0) cv.medianBlur(dst, dst, k*2+1);
+      // Show result
+      cv.imshow(processCanvas, dst);
+      preview.src = processCanvas.toDataURL();
+      // Cleanup
+      src.delete(); dst.delete();
+      logDebug('Preprocessing applied');
     });
   </script>
 </body>
