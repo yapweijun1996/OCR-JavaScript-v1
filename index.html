@@ -101,6 +101,21 @@
         <option value="por">Portuguese</option>
         <option value="chi_sim">Chinese (Simplified)</option>
       </select>
+      <label for="psm-select">PSM:</label>
+      <select id="psm-select">
+        <option value="3">Auto</option>
+        <option value="6">Single Block</option>
+        <option value="7">Single Line</option>
+        <option value="8">Single Word</option>
+        <option value="10">Single Char</option>
+      </select>
+      <label for="oem-select">OEM:</label>
+      <select id="oem-select">
+        <option value="3">Default</option>
+        <option value="0">Tesseract Only</option>
+        <option value="1">LSTM Only</option>
+        <option value="2">Tesseract+LSTM</option>
+      </select>
       <label for="debug-toggle"><input type="checkbox" id="debug-toggle"> Debug Mode</label>
     </div>
     <!-- Preprocessing controls -->
@@ -224,6 +239,8 @@
     const resultEl = document.getElementById('result');
     const engineSelector = document.getElementById('ocr-engine');
     const languageSelector = document.getElementById('ocr-language');
+    const psmSelector = document.getElementById('psm-select');
+    const oemSelector = document.getElementById('oem-select');
     // Debug functions
     function handleFiles(files) {
       if (!files || files.length === 0) return;
@@ -241,9 +258,13 @@
       const engine = currentEngine;
       if (engine === 'tesseract') {
         const language = languageSelector.value;
+        const psm = psmSelector.value;
+        const oem = oemSelector.value;
         logDebug(`Starting Tesseract OCR (lang=${language})`);
         setDebugStatus(`OCR: Tesseract.js (${language})`);
         Tesseract.recognize(url, language, {
+          tessedit_pageseg_mode: Number(psm),
+          tessedit_ocr_engine_mode: Number(oem),
           logger: m => {
             if (m.status === 'recognizing text') {
               const prog = Math.round(m.progress * 100);
